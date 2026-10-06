@@ -21,7 +21,7 @@ img { max-width: 100%; }
 <title>Lyric Stage</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=JetBrains+Mono:wght@500;700&display=swap">
 <style>
 /* Layout: phone-first column of songs; on wide screens songs on the left, setup and settings on the right.
    The stage is a separate black layer rotated 90 degrees, so a monitor standing upright reads it straight
@@ -191,11 +191,23 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
 .ln.brk { color: var(--stage-soft); letter-spacing: 0.3em; }
 .ch { font: 500 calc(var(--fs) * 0.62) / 1.2 var(--font-mono); color: var(--stage-chord); letter-spacing: 0.04em;
   white-space: pre-wrap; overflow-wrap: anywhere; margin: calc(var(--fs) * 0.42) 0 calc(var(--fs) * 0.1); transition: opacity 0.3s ease; }
+/* Chords over words: each word stays whole, each chord sits over its letter */
 .ln.pr { line-height: 1.12; }
-.seg { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; max-width: 100%; }
+.wd { display: inline-block; white-space: nowrap; }
+.pc { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; }
 .cd { font: 500 calc(var(--fs) * 0.58) / 1.3 var(--font-mono); color: var(--stage-chord); font-style: normal;
-  white-space: pre; padding-right: 0.45em; letter-spacing: 0.02em; }
-.tx { white-space: pre-wrap; }
+  white-space: pre; letter-spacing: 0.02em; }
+.cd.has { padding-right: 0.35em; }
+.tx { white-space: pre; }
+/* Sheet: chord line above lyric line in the same columns as the original page */
+.srow { margin: 0 0 calc(var(--sfs) * 0.55); }
+.sblk { display: inline-block; text-align: left; max-width: 100%; vertical-align: top; }
+.sch, .sly { font-family: var(--font-mono); font-size: var(--sfs); line-height: 1.22; white-space: pre; }
+.sch { color: var(--stage-chord); font-weight: 500; }
+.sly { color: var(--stage-ink); font-weight: 700; }
+.sly.wrap { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sly.bk { font-style: italic; font-weight: 400; color: var(--stage-soft); }
+#stage.sheet .lbl { margin-top: calc(var(--sfs) * 1.1); }
 .tab { font: 500 calc(var(--fs) * 0.42) / 1.25 var(--font-mono); color: var(--stage-soft); white-space: pre;
   overflow: hidden; text-align: left; margin: 0; transition: opacity 0.3s ease; }
 .lbl { font: 500 calc(var(--fs) * 0.36) / 1.2 var(--font-mono); letter-spacing: 0.16em; text-transform: uppercase;
@@ -342,7 +354,8 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
         <div class="set-row">
           <span class="set-label" id="chordLabel">Chords</span>
           <div class="seg" role="group" aria-labelledby="chordLabel">
-            <button type="button" data-set="chords" data-val="show" aria-pressed="true">Show</button>
+            <button type="button" data-set="chords" data-val="sheet" aria-pressed="true">Sheet</button>
+            <button type="button" data-set="chords" data-val="words" aria-pressed="false">Over words</button>
             <button type="button" data-set="chords" data-val="hide" aria-pressed="false">Hide</button>
           </div>
         </div>
@@ -529,11 +542,11 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
   var embedded = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
   var coarse = false;
   try { coarse = window.matchMedia('(pointer: coarse)').matches; } catch (e) { /* ignore */ }
-  var defaults = { rot: 90, size: 4, speed: 5, align: 'center', chords: 'show', topPct: (!STANDALONE && embedded && coarse) ? 20 : 0 };
+  var defaults = { rot: 90, size: 4, speed: 5, align: 'center', chords: 'sheet', topPct: (!STANDALONE && embedded && coarse) ? 20 : 0 };
   var settings = Object.assign({}, defaults, lsGet(LS_SET, {}) || {});
   if ([90, -90, 0].indexOf(Number(settings.rot)) < 0) settings.rot = 90; else settings.rot = Number(settings.rot);
   if (['left', 'center', 'right'].indexOf(settings.align) < 0) settings.align = 'center';
-  if (['show', 'hide'].indexOf(settings.chords) < 0) settings.chords = 'show';
+  if (['sheet', 'words', 'hide'].indexOf(settings.chords) < 0) settings.chords = 'sheet';
   settings.size = clamp(settings.size, 1, 10);
   settings.speed = clamp(settings.speed, 1, 15);
   settings.topPct = clamp(settings.topPct, 0, 32);
@@ -670,7 +683,37 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
       var end = k + 1 < chords.length ? chords[k + 1].col : l.length;
       segs.push({ c: ch.name, t: ch.col < l.length ? l.slice(ch.col, Math.max(ch.col, end)) : '' });
     });
-    return { type: 'pair', bk: !!isBacking, segs: segs, text: lyricText };
+    return {
+      type: 'pair', bk: !!isBacking, segs: segs, text: lyricText, chords: chords,
+      chordLine: c.replace(/\s+$/, ''), lyricLine: l.replace(/\s+$/, ''), words: pairWords(chords, l.replace(/\s+$/, ''))
+    };
+  }
+
+  /* Splits a chord+lyric pair into whole words; a chord inside a word becomes a piece of that word */
+  function pairWords(chords, line) {
+    var marks = {};
+    var lastCol = -1;
+    chords.forEach(function (ch) { marks[ch.col] = marks[ch.col] ? marks[ch.col] + ' ' + ch.name : ch.name; lastCol = Math.max(lastCol, ch.col); });
+    var words = [];
+    var cur = null;
+    var pending = '';
+    var end = Math.max(line.length, lastCol + 1);
+    for (var i = 0; i < end; i++) {
+      var chr = i < line.length ? line.charAt(i) : ' ';
+      var here = marks[i] || '';
+      if (chr === ' ') {
+        if (here) pending = pending ? pending + ' ' + here : here;
+        cur = null;
+        continue;
+      }
+      var chord = pending && here ? pending + ' ' + here : (pending || here);
+      pending = '';
+      if (!cur) { cur = { pieces: [] }; words.push(cur); cur.pieces.push({ c: chord, t: '' }); }
+      else if (chord) cur.pieces.push({ c: chord, t: '' });
+      cur.pieces[cur.pieces.length - 1].t += chr;
+    }
+    if (pending) words.push({ pieces: [{ c: pending, t: ' ' }] });
+    return words;
   }
 
   /* ---------- Ultimate Guitar and other chord pages ---------- */
@@ -1480,22 +1523,45 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
     return s;
   }
 
+  /* Over words: words wrap as whole units, each chord stays over its letter */
   function pairEl(it) {
     var el = document.createElement('div');
     el.className = 'ln pr' + (it.bk ? ' bk' : '');
-    it.segs.forEach(function (sg) {
-      var seg = document.createElement('span');
-      seg.className = 'seg';
-      seg.appendChild(span('cd', sg.c || ' '));
-      seg.appendChild(span('tx', sg.t || ' '));
-      el.appendChild(seg);
+    it.words.forEach(function (w, wi) {
+      if (wi) el.appendChild(document.createTextNode(' '));
+      var word = document.createElement('span');
+      word.className = 'wd';
+      w.pieces.forEach(function (pc) {
+        var piece = document.createElement('span');
+        piece.className = 'pc';
+        piece.appendChild(span(pc.c ? 'cd has' : 'cd', pc.c || ' '));
+        piece.appendChild(span('tx', pc.t));
+        word.appendChild(piece);
+      });
+      el.appendChild(word);
     });
     return el;
+  }
+
+  /* Sheet: the chord line and the lyric line exactly as written, in the same columns */
+  function sheetEl(lines) {
+    var row = document.createElement('div');
+    row.className = 'srow';
+    var blk = document.createElement('div');
+    blk.className = 'sblk';
+    blk.dir = 'ltr';
+    lines.forEach(function (l) { var d = div(l[0], l[1]); d.dir = 'ltr'; blk.appendChild(d); });
+    row.appendChild(blk);
+    return row;
   }
 
   function buildLyrics(p) {
     var hideChords = settings.chords === 'hide';
     var items = hideChords ? p.items.filter(function (i) { return i.type !== 'ch' && i.type !== 'tab'; }) : p.items;
+    var sheet = settings.chords === 'sheet' && !p.synced && items.some(function (i) { return i.type === 'pair' || i.type === 'ch'; });
+    S.sheet = sheet;
+    S.sheetChars = 0;
+    els.stage.classList.toggle('sheet', sheet);
     els.lyrics.textContent = '';
     S.els = [];
     S.times = [];
@@ -1503,7 +1569,16 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
     var foundFirst = false;
     items.forEach(function (it) {
       var el;
-      if (it.type === 'gap') el = div('gap');
+      if (sheet && it.type === 'pair') {
+        S.sheetChars = Math.max(S.sheetChars, it.chordLine.length, it.lyricLine.length);
+        el = sheetEl([['sch', it.chordLine], [it.bk ? 'sly bk' : 'sly', it.lyricLine]]);
+      } else if (sheet && it.type === 'ch') {
+        S.sheetChars = Math.max(S.sheetChars, it.text.length);
+        el = sheetEl([['sch', it.text]]);
+      } else if (sheet && (it.type === 'ln' || it.type === 'bk')) {
+        el = sheetEl([[it.type === 'bk' ? 'sly wrap bk' : 'sly wrap', it.text]]);
+      }
+      else if (it.type === 'gap') el = div('gap');
       else if (it.type === 'lbl') el = div('lbl', it.text);
       else if (it.type === 'ch') el = div('ch', it.text);
       else if (it.type === 'tab') { el = div('tab', it.text); el.dir = 'ltr'; }
@@ -1543,7 +1618,13 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
     var base = Math.min(sw, sh * 1.2);
     S.fs = Math.max(14, Math.round(base * (0.03 + settings.size * 0.008)));
     els.stage.style.setProperty('--fs', S.fs + 'px');
-    els.stage.style.setProperty('--gut', Math.round(sw * 0.07) + 'px');
+    var gut = Math.round(sw * (S.sheet ? 0.045 : 0.07));
+    els.stage.style.setProperty('--gut', gut + 'px');
+    var wanted = Math.round(S.fs * 0.92);
+    var fit = S.sheet && S.sheetChars ? Math.floor((sw - 2 * gut) / (S.sheetChars * 0.61)) : wanted;
+    S.sfs = Math.max(9, Math.min(wanted, fit));
+    S.sheetCapped = S.sheet && fit < wanted;
+    els.stage.style.setProperty('--sfs', S.sfs + 'px');
     els.lyrics.setAttribute('data-align', settings.align);
     els.alignLbl.textContent = ALIGN_NAMES[settings.align];
     els.lyrics.style.paddingTop = Math.round(sh * 0.38) + 'px';
@@ -1627,7 +1708,7 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
 
   function flash(text) { S.toast = text; S.toastUntil = now() + 1800; }
 
-  function pxPerSec() { return settings.speed * 0.065 * S.fs * 1.58; }
+  function pxPerSec() { return settings.speed * 0.065 * (S.sheet ? S.sfs * 3 : S.fs * 1.58); }
 
   function setText(el, key, text) {
     if (S[key] === text) return;
@@ -1750,6 +1831,7 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
       case 'bigger':
         settings.size = clamp(settings.size + (name === 'bigger' ? 1 : -1), 1, 10);
         saveSettings(); renderSettings(); layout();
+        if (name === 'bigger' && S.sheetCapped) flash('Largest size that keeps the chords lined up');
         break;
       case 'align':
         settings.align = settings.align === 'center' ? 'left' : (settings.align === 'left' ? 'right' : 'center');
