@@ -158,6 +158,11 @@ input:focus-visible, textarea:focus-visible, .cb:focus-visible, .file-in:focus-v
 input[type="text"], textarea { font: 17px/1.45 var(--font-body); color: var(--ink); background: var(--surface);
   border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; width: 100%; box-sizing: border-box; }
 textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.55; }
+textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: auto; }
+.link-row { display: flex; gap: 8px; align-items: stretch; }
+.link-row input { flex: 1; min-width: 0; }
+.link-row .btn { flex: none; text-decoration: none; }
+.convert { justify-self: start; }
 .parse { font-family: var(--font-mono); font-size: 12.5px; color: var(--ink); margin: 0; font-variant-numeric: tabular-nums; }
 .ed-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }
 
@@ -183,10 +188,17 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
 .ln.brk { color: var(--stage-soft); letter-spacing: 0.3em; }
 .ch { font: 500 calc(var(--fs) * 0.62) / 1.2 var(--font-mono); color: var(--stage-chord); letter-spacing: 0.04em;
   white-space: pre-wrap; overflow-wrap: anywhere; margin: calc(var(--fs) * 0.42) 0 calc(var(--fs) * 0.1); transition: opacity 0.3s ease; }
+.ln.pr { line-height: 1.12; }
+.seg { display: inline-flex; flex-direction: column; align-items: flex-start; vertical-align: bottom; max-width: 100%; }
+.cd { font: 500 calc(var(--fs) * 0.58) / 1.3 var(--font-mono); color: var(--stage-chord); font-style: normal;
+  white-space: pre; padding-right: 0.45em; letter-spacing: 0.02em; }
+.tx { white-space: pre-wrap; }
+.tab { font: 500 calc(var(--fs) * 0.42) / 1.25 var(--font-mono); color: var(--stage-soft); white-space: pre;
+  overflow: hidden; text-align: left; margin: 0; transition: opacity 0.3s ease; }
 .lbl { font: 500 calc(var(--fs) * 0.36) / 1.2 var(--font-mono); letter-spacing: 0.16em; text-transform: uppercase;
   color: var(--stage-label); margin: calc(var(--fs) * 0.9) 0 calc(var(--fs) * 0.36); transition: opacity 0.3s ease; }
 .gap { height: calc(var(--fs) * 0.8); }
-#stage.synced .ln, #stage.synced .lbl, #stage.synced .ch { opacity: 0.36; }
+#stage.synced .ln, #stage.synced .lbl, #stage.synced .ch, #stage.synced .tab { opacity: 0.36; }
 #stage.synced .nxt { opacity: 0.66; }
 #stage.synced .past { opacity: 0.16; }
 #stage.synced .cur { opacity: 1; }
@@ -242,6 +254,10 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M7 9l5-5 5 5"/><path d="M5 15v4h14v-4"/></svg>
             Add files
           </label>
+          <button id="linkBtn" class="btn sm" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
+            From a link
+          </button>
           <button id="newBtn" class="btn sm" type="button">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             New song
@@ -367,11 +383,20 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
       <input id="fArtist" type="text" autocomplete="off" placeholder="Optional">
     </div>
     <div class="field">
-      <label for="fLyrics">Lyrics</label>
-      <textarea id="fLyrics" spellcheck="false" placeholder="[Verse 1]&#10;Am        F&#10;First line of the song&#10;Second line&#10;&#10;[Chorus]&#10;Chorus line&#10;&#10;Synced lyrics (LRC) work too:&#10;[00:12.40]First line"></textarea>
+      <label for="fLink">Link</label>
+      <div class="link-row">
+        <input id="fLink" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Optional · Ultimate Guitar or other chord page">
+        <a id="srcOpen" class="btn sm" href="#" target="_blank" rel="noopener noreferrer" hidden>Open page</a>
+      </div>
+      <p class="hint" id="linkHint">Paste an Ultimate Guitar link here. Tap Open page, select all the text on that page, copy it, and paste it into Lyrics. The chords stay above the right words.</p>
     </div>
+    <div class="field">
+      <label for="fLyrics">Lyrics</label>
+      <textarea id="fLyrics" spellcheck="false" placeholder="[Verse 1]&#10;Am          F&#10;First line of the song&#10;Second line&#10;&#10;[Chorus]&#10;Chorus line&#10;&#10;Synced lyrics (LRC) work too:&#10;[00:12.40]First line"></textarea>
+    </div>
+    <button id="convertBtn" class="btn sm convert" type="button" hidden>Convert Ultimate Guitar text</button>
     <p id="parseNote" class="parse">Paste lyrics to see how they will play.</p>
-    <p class="hint">Plain lyrics scroll at your speed. Lyrics with times like [00:12.40] (LRC files) light up line by line. Lines like [Chorus] become section labels, chord-only lines (G F#m Bm) show smaller in amber, and lines in (parentheses) show as backing vocals.</p>
+    <p class="hint">Plain lyrics scroll at your speed. Lyrics with times like [00:12.40] (LRC files) light up line by line. Lines like [Chorus] become section labels. A chord line right above a lyric line keeps each chord over its word, and lines in (parentheses) show as backing vocals.</p>
     <div class="ed-actions">
       <button id="showBtn" class="btn primary" type="button" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>
@@ -487,9 +512,11 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
   function cleanSong(s) {
     return {
       id: String(s.id), title: String(s.title || 'Untitled song'), artist: String(s.artist || ''),
-      lyrics: String(s.lyrics || ''), updatedAt: Number(s.updatedAt) || 0
+      lyrics: String(s.lyrics || ''), updatedAt: Number(s.updatedAt) || 0,
+      source: /^https?:\/\//i.test(String(s.source || '')) ? String(s.source) : ''
     };
   }
+  function songDoc(s) { return { title: s.title, artist: s.artist, lyrics: s.lyrics, updatedAt: s.updatedAt, source: s.source || '' }; }
   var localSongs = (lsGet(LS_SONGS, []) || []).filter(function (s) { return s && s.id && typeof s.lyrics === 'string'; }).map(cleanSong);
   var cloudSongs = [];
   var db = null;
@@ -510,6 +537,8 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
   var SECTION = /^(intro|verse|pre-?chorus|chorus|post-?chorus|bridge|hook|outro|refrain|interlude|instrumental|break|solo)\b[^:]{0,24}:$/i;
   var CHORD = /^[A-G](?:#|b|♯|♭)?(?:maj|min|m|M|dim|aug|sus|add|°|ø|\+)?\d{0,2}(?:(?:sus|add|maj|b|#)\d{1,2})*(?:\/[A-G](?:#|b|♯|♭)?)?$/;
   var CHORD_FILLER = /^(?:\||\|\||-+|\/|x\d{1,2}|\(x\d{1,2}\)|N\.?C\.?)$/i;
+  var TAB_LINE = /^[a-gA-G]#?\s?\|[-\d|hpbrxsv\/\\~()<>.^* ]{4,}$/;
+  var INFO = /^(capo|tuning|key|tempo|bpm|strumming)\s*:/i;
 
   function isChordLine(text) {
     var toks = text.split(/\s+/).filter(Boolean);
@@ -524,7 +553,8 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
 
   function classify(text) {
     if (!text) return 'gap';
-    if (/^\[[^\]]+\]$/.test(text) || SECTION.test(text)) return 'lbl';
+    if (TAB_LINE.test(text)) return 'tab';
+    if (/^\[[^\]]+\]$/.test(text) || SECTION.test(text) || INFO.test(text)) return 'lbl';
     if (isChordLine(text)) return 'ch';
     if (/^\(.*\)$/.test(text)) return 'bk';
     return 'ln';
@@ -536,24 +566,24 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     var seq = [];
     var timedCount = 0;
     String(raw || '').replace(/\r\n?/g, '\n').split('\n').forEach(function (line) {
-      var s = line.replace(/\s+$/, '');
-      var trimmed = s.trim();
+      var full = line.replace(/ /g, ' ').replace(/\t/g, '    ').replace(/\s+$/, '');
+      var trimmed = full.trim();
       var m = trimmed.match(META);
       if (m) { meta[m[1].toLowerCase()] = m[2].trim(); return; }
       var times = [];
       var mm;
-      s = trimmed;
+      var s = trimmed;
       while ((mm = s.match(TS_LEAD))) {
         var frac = mm[3] ? Number('0.' + mm[3]) : 0;
         times.push(Number(mm[1]) * 60 + Number(mm[2]) + frac);
         s = s.slice(mm[0].length).trim();
       }
-      s = s.replace(WORD_TAG, '');
-      var type = classify(s.trim());
-      if (type !== 'ch') s = s.replace(/\s{2,}/g, ' ');
-      s = s.trim();
+      var rawText = (times.length ? s : full).replace(WORD_TAG, '');
+      s = s.replace(WORD_TAG, '').trim();
+      var type = classify(s);
+      if (type !== 'ch' && type !== 'tab') s = s.replace(/\s{2,}/g, ' ');
       if (times.length) timedCount += times.length;
-      seq.push({ times: times, text: s });
+      seq.push({ times: times, text: s, raw: rawText, type: type });
     });
 
     var off = (Number(meta.offset) || 0) / 1000;
@@ -573,16 +603,106 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     }
 
     var items = [];
-    seq.forEach(function (x) {
-      var type = classify(x.text);
+    for (var i = 0; i < seq.length; i++) {
+      var x = seq[i];
+      var type = x.type;
       if (type === 'gap') {
         if (items.length && items[items.length - 1].type !== 'gap') items.push({ type: 'gap' });
-        return;
+        continue;
       }
-      items.push({ type: type, text: type === 'lbl' ? labelText(x.text) : x.text });
-    });
+      var nextLine = seq[i + 1];
+      if (type === 'ch' && nextLine && (nextLine.type === 'ln' || nextLine.type === 'bk')) {
+        items.push(makePair(x.raw, nextLine.raw, nextLine.text, nextLine.type === 'bk'));
+        i++;
+        continue;
+      }
+      items.push({ type: type, text: type === 'lbl' ? labelText(x.text) : (type === 'tab' ? x.raw.trim() : x.text) });
+    }
     while (items.length && items[items.length - 1].type === 'gap') items.pop();
     return { synced: false, meta: meta, items: items };
+  }
+
+  /* A chord line directly above a lyric line: keep each chord over the character it sits on */
+  function leadSpaces(s) { var m = s.match(/^ */); return m ? m[0].length : 0; }
+  function makePair(chordRaw, lyricRaw, lyricText, isBacking) {
+    var cut = Math.min(leadSpaces(chordRaw), leadSpaces(lyricRaw));
+    var c = chordRaw.slice(cut);
+    var l = lyricRaw.slice(cut);
+    var chords = [];
+    var re = /\S+/g;
+    var m;
+    while ((m = re.exec(c))) chords.push({ col: m.index, name: m[0] });
+    var segs = [];
+    var first = chords.length ? chords[0].col : l.length;
+    if (first > 0) segs.push({ c: '', t: l.slice(0, first) });
+    chords.forEach(function (ch, k) {
+      var end = k + 1 < chords.length ? chords[k + 1].col : l.length;
+      segs.push({ c: ch.name, t: ch.col < l.length ? l.slice(ch.col, Math.max(ch.col, end)) : '' });
+    });
+    return { type: 'pair', bk: !!isBacking, segs: segs, text: lyricText };
+  }
+
+  /* ---------- Ultimate Guitar and other chord pages ---------- */
+  var UG_TITLE = /^(.+?)\s+(?:chords|tabs?|ukulele chords|ukulele|bass tabs?|bass|official|guitar pro|power tab)\s+by\s+(.+?)$/i;
+  var UG_JUNK = /^(?:.*ultimate[- ]?guitar.*|https?:\/\/\S+|print|x|×|rating\b.*|difficulty\s*:.*|author\s*:.*|last (?:edit|update)\b.*|[\d,.]+\s*views?|report bad tab|.*©.*|.*all rights reserved.*)$/i;
+
+  function looksLikeUG(text) {
+    return /\[ch\]|\[\/tab\]|ultimate[- ]?guitar|\b(?:chords|tabs?) by\b/i.test(String(text || ''));
+  }
+
+  function cleanArtist(a) { return a.replace(/\s*@.*$/, '').replace(/(?:tabs|chords)$/i, '').trim(); }
+
+  function cleanUG(text) {
+    var t = String(text || '').replace(/\r\n?/g, '\n').replace(/ /g, ' ').replace(/\t/g, '    ');
+    t = t.replace(/\[\/?tab\]/gi, '').replace(/\[ch\]([^\[]*?)\[\/ch\]/gi, '$1');
+    var lines = t.split('\n').map(function (l) { return l.replace(/\s+$/, ''); });
+    var out = { title: '', artist: '', text: '' };
+    var start = -1;
+    for (var i = 0; i < lines.length && i < 80; i++) {
+      var s = lines[i].trim();
+      if (s && (/^\[[^\]]+\]$/.test(s) || isChordLine(s) || TAB_LINE.test(s))) { start = i; break; }
+    }
+    var kept = [];
+    lines.forEach(function (l, i) {
+      var s = l.trim();
+      var tm = s.match(UG_TITLE);
+      if (tm && !out.title && (start < 0 || i < start)) { out.title = tm[1].trim(); out.artist = cleanArtist(tm[2]); return; }
+      if (start >= 0 && i < start) { if (INFO.test(s)) kept.push(s); return; }
+      if (UG_JUNK.test(s)) return;
+      kept.push(l);
+    });
+    while (kept.length && !kept[0].trim()) kept.shift();
+    while (kept.length && !kept[kept.length - 1].trim()) kept.pop();
+    out.text = kept.join('\n').replace(/\n{3,}/g, '\n\n');
+    return out;
+  }
+
+  /* Reads a pasted link, including Markdown form: [James Dean Chords by Cairokee @ Ultimate Guitar](https://...) */
+  function parseLink(input) {
+    var s = String(input || '').trim();
+    var res = { url: '', title: '', artist: '' };
+    var md = s.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/);
+    var label = '';
+    if (md) { label = md[1]; res.url = md[2]; }
+    else { var u = s.match(/https?:\/\/\S+/); if (u) res.url = u[0].replace(/[)\].,]+$/, ''); }
+    if (label) {
+      var tm = label.replace(/\s*@.*$/, '').match(UG_TITLE);
+      if (tm) { res.title = tm[1].trim(); res.artist = cleanArtist(tm[2]); }
+    } else if (/ultimate-guitar\.com\/tab\/[^\/?]+\/[^\/?]+/i.test(res.url)) {
+      var parts = res.url.match(/\/tab\/([^\/?]+)\/([^\/?#]+)/i);
+      var nice = function (slug) { return slug.replace(/-/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }); };
+      res.artist = nice(parts[1]);
+      res.title = nice(parts[2].replace(/-(?:chords|tabs?|ukulele-chords|bass-tabs?|official)-\d+$/i, '').replace(/-\d+$/, ''));
+    }
+    return res;
+  }
+
+  function pageUrl(url) {
+    if (/ultimate-guitar\.com/i.test(url) && !/\/tab\/print/i.test(url)) {
+      var id = url.match(/-(\d+)(?:[?#].*)?$/);
+      if (id) return 'https://tabs.ultimate-guitar.com/tab/print?id=' + id[1];
+    }
+    return url;
   }
 
   function fmt(t) {
@@ -591,8 +711,9 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     var s = Math.floor(t % 60);
     return m + ':' + (s < 10 ? '0' : '') + s;
   }
-  function sungLines(p) { return p.items.filter(function (i) { return i.type === 'ln' || i.type === 'bk'; }); }
+  function sungLines(p) { return p.items.filter(function (i) { return i.type === 'ln' || i.type === 'bk' || i.type === 'pair'; }); }
   function countType(p, type) { return p.items.filter(function (i) { return i.type === type; }).length; }
+  function chordCount(p) { return countType(p, 'ch') + countType(p, 'pair'); }
 
   /* ---------- library view ---------- */
   var els = {
@@ -601,6 +722,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     fTitle: $('#fTitle'), fArtist: $('#fArtist'), fLyrics: $('#fLyrics'), parseNote: $('#parseNote'),
     saveState: $('#saveState'), showBtn: $('#showBtn'), saveBtn: $('#saveBtn'), delBtn: $('#delBtn'),
     backBtn: $('#backBtn'), edHead: $('#edHead'), newBtn: $('#newBtn'), fileIn: $('#fileIn'),
+    linkBtn: $('#linkBtn'), fLink: $('#fLink'), srcOpen: $('#srcOpen'), convertBtn: $('#convertBtn'),
     copyLib: $('#copyLib'), pasteLib: $('#pasteLib'), importBox: $('#importBox'), importText: $('#importText'),
     importGo: $('#importGo'), importClose: $('#importClose'), bkState: $('#bkState'), bkHint: $('#bkHint'),
     setHint: $('#setHint'), howHint: $('#howHint'),
@@ -668,7 +790,8 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
         meta.appendChild(makeTag('Scroll'));
         meta.appendChild(makeTag(n + ' lines'));
       }
-      if (countType(p, 'ch')) meta.appendChild(makeTag('Chords'));
+      if (chordCount(p)) meta.appendChild(makeTag('Chords'));
+      if (song.source) meta.appendChild(makeTag(/ultimate-guitar\.com/i.test(song.source) ? 'Ultimate Guitar' : 'Link'));
       main.appendChild(meta);
       main.addEventListener('click', function () { openEditor(song); });
 
@@ -678,7 +801,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
       show.setAttribute('aria-label', 'Show ' + song.title + ' on the monitor');
       show.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>';
       show.appendChild(document.createTextNode('Show'));
-      show.disabled = n === 0 && countType(p, 'ch') === 0;
+      show.disabled = n === 0 && chordCount(p) === 0;
       show.addEventListener('click', function () { openStage(song); });
 
       li.appendChild(main);
@@ -729,9 +852,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
 
   function persist(song) {
     if (cloud && db) {
-      return db.collection('songs').doc(song.id).set({
-        title: song.title, artist: song.artist, lyrics: song.lyrics, updatedAt: song.updatedAt
-      }).then(function () {
+      return db.collection('songs').doc(song.id).set(songDoc(song)).then(function () {
         upsert(cloudSongs, song);
         localSongs = localSongs.filter(function (s) { return s.id !== song.id; });
         saveLocal();
@@ -771,7 +892,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
         localSongs = localSongs.filter(function (x) { return x.id !== s.id; });
         return next();
       }
-      return db.collection('songs').doc(s.id).set({ title: s.title, artist: s.artist, lyrics: s.lyrics, updatedAt: s.updatedAt })
+      return db.collection('songs').doc(s.id).set(songDoc(s))
         .then(function () { localSongs = localSongs.filter(function (x) { return x.id !== s.id; }); return next(); })
         .catch(function () { saveLocal(); renderAll(); });
     }
@@ -790,7 +911,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
         db.collection('songs').onSnapshot(function (snap) {
           cloudSongs = snap.docs.filter(function (x) { return x.exists; }).map(function (x) {
             var data = x.data() || {};
-            return cleanSong({ id: x.id, title: data.title, artist: data.artist, lyrics: data.lyrics, updatedAt: data.updatedAt });
+            return cleanSong({ id: x.id, title: data.title, artist: data.artist, lyrics: data.lyrics, updatedAt: data.updatedAt, source: data.source });
           });
           cloud = true;
           renderAll();
@@ -806,7 +927,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
   function libraryText() {
     return JSON.stringify({
       app: 'lyric-stage', version: 1,
-      songs: allSongs().map(function (s) { return { id: s.id, title: s.title, artist: s.artist, lyrics: s.lyrics, updatedAt: s.updatedAt }; })
+      songs: allSongs().map(function (s) { var d = songDoc(s); d.id = s.id; return d; })
     });
   }
 
@@ -829,7 +950,7 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
       var raw = queue.shift();
       if (!raw || typeof raw.lyrics !== 'string' || !raw.lyrics.trim()) return next();
       var id = (typeof raw.id === 'string' && SAFE_ID.test(raw.id) && raw.id !== 'sample') ? raw.id : newId();
-      var song = cleanSong({ id: id, title: raw.title, artist: raw.artist, lyrics: raw.lyrics, updatedAt: Number(raw.updatedAt) || Date.now() });
+      var song = cleanSong({ id: id, title: raw.title, artist: raw.artist, lyrics: raw.lyrics, updatedAt: Number(raw.updatedAt) || Date.now(), source: raw.source });
       var old = existing[id];
       if (old && old.updatedAt >= song.updatedAt) return next();
       count++;
@@ -901,10 +1022,13 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
         var lib = /\.json$/i.test(f.name) ? parseLibrary(text) : null;
         if (lib) return importSongs(lib).then(function (n) { added += n; return next(); });
         if (!text.trim()) return next();
+        var ug = looksLikeUG(text) ? cleanUG(text) : null;
+        if (ug) text = ug.text;
         var p = parseLyrics(text);
-        var title = p.meta.ti || f.name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Untitled song';
+        var title = (ug && ug.title) || p.meta.ti || f.name.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim() || 'Untitled song';
+        var artist = (ug && ug.artist) || p.meta.ar || '';
         added++;
-        return persist(cleanSong({ id: newId(), title: title, artist: p.meta.ar || '', lyrics: text, updatedAt: Date.now() })).then(next);
+        return persist(cleanSong({ id: newId(), title: title, artist: artist, lyrics: text, updatedAt: Date.now() })).then(next);
       });
     }
     return next();
@@ -928,8 +1052,13 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     var p = parseLyrics(els.fLyrics.value);
     var n = sungLines(p).length;
     var k = countType(p, 'lbl');
-    var c = countType(p, 'ch');
-    var extra = (k ? ' · ' + plural(k, 'section') : '') + (c ? ' · ' + plural(c, 'chord line') : '');
+    var c = chordCount(p);
+    var pairs = countType(p, 'pair');
+    var extra = (k ? ' · ' + plural(k, 'section') : '') + (pairs ? ' · chords over ' + plural(pairs, 'line') : (c ? ' · ' + plural(c, 'chord line') : ''));
+    var mono = c > 0 || countType(p, 'tab') > 0;
+    els.fLyrics.classList.toggle('mono', mono);
+    els.fLyrics.setAttribute('wrap', mono ? 'off' : 'soft');
+    els.convertBtn.hidden = !looksLikeUG(els.fLyrics.value);
     if (!n && !c) {
       els.parseNote.textContent = 'Paste lyrics to see how they will play.';
     } else if (p.synced) {
@@ -955,6 +1084,8 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     els.fTitle.value = song ? song.title : '';
     els.fArtist.value = song ? song.artist : '';
     els.fLyrics.value = song ? song.lyrics : '';
+    els.fLink.value = song && song.source ? song.source : '';
+    updateLinkUI();
     els.edHead.textContent = !song ? 'New song' : (isSample ? 'Sample song' : 'Edit song');
     els.delBtn.hidden = !editing.id;
     dirty = false;
@@ -987,13 +1118,69 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
   });
 
   function currentFields() {
-    return { title: els.fTitle.value.trim() || 'Untitled song', artist: els.fArtist.value.trim(), lyrics: els.fLyrics.value };
+    return {
+      title: els.fTitle.value.trim() || 'Untitled song', artist: els.fArtist.value.trim(), lyrics: els.fLyrics.value,
+      source: parseLink(els.fLink.value).url
+    };
   }
+
+  /* ---------- links and pasted chord pages ---------- */
+  function updateLinkUI() {
+    var url = parseLink(els.fLink.value).url;
+    els.srcOpen.hidden = !url;
+    if (url) els.srcOpen.href = pageUrl(url);
+  }
+
+  els.fLink.addEventListener('input', function () {
+    var info = parseLink(els.fLink.value);
+    if (info.url && els.fLink.value.trim() !== info.url) els.fLink.value = info.url;
+    if (info.title && !els.fTitle.value.trim()) els.fTitle.value = info.title;
+    if (info.artist && !els.fArtist.value.trim()) els.fArtist.value = info.artist;
+    updateLinkUI();
+    markDirty();
+    if (info.url && /ultimate-guitar\.com/i.test(info.url)) {
+      setSaveState(els.fLyrics.value.trim() ? 'Link added' : 'Now tap Open page and copy the page text');
+    }
+  });
+
+  function applyConverted(raw, replaceAll) {
+    var c = cleanUG(raw);
+    if (replaceAll || !els.fLyrics.value.trim()) {
+      els.fLyrics.value = c.text;
+    } else {
+      els.fLyrics.setRangeText(c.text, els.fLyrics.selectionStart, els.fLyrics.selectionEnd, 'end');
+    }
+    if (c.title && !els.fTitle.value.trim()) els.fTitle.value = c.title;
+    if (c.artist && !els.fArtist.value.trim()) els.fArtist.value = c.artist;
+    markDirty();
+    updateParse();
+    setSaveState('Converted from Ultimate Guitar · check it, then Save');
+  }
+
+  els.fLyrics.addEventListener('paste', function (e) {
+    var data = e.clipboardData && e.clipboardData.getData('text/plain');
+    if (!data) return;
+    if (looksLikeUG(data)) { e.preventDefault(); applyConverted(data, false); return; }
+    if (/[ \t]/.test(data)) {
+      e.preventDefault();
+      els.fLyrics.setRangeText(data.replace(/ /g, ' ').replace(/\t/g, '    '), els.fLyrics.selectionStart, els.fLyrics.selectionEnd, 'end');
+      markDirty();
+      updateParse();
+    }
+  });
+
+  els.convertBtn.addEventListener('click', function () { applyConverted(els.fLyrics.value, true); });
+
+  els.linkBtn.addEventListener('click', function () {
+    openEditor(null);
+    els.fLink.focus();
+    setSaveState('Paste the link first');
+  });
 
   function saveEditing() {
     var f = currentFields();
     if (!f.lyrics.trim()) { setSaveState('Add lyrics before saving'); return Promise.resolve(null); }
-    var song = { id: editing.id || newId(), title: f.title, artist: f.artist, lyrics: f.lyrics, updatedAt: Date.now() };
+    var song = cleanSong({ id: editing.id || newId(), title: f.title, artist: f.artist, lyrics: f.lyrics, updatedAt: Date.now(), source: f.source });
     editing.id = song.id;
     editing.sample = false;
     setSaveState('Saving…');
@@ -1069,8 +1256,29 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
     return d;
   }
 
+  function span(cls, text) {
+    var s = document.createElement('span');
+    s.className = cls;
+    s.textContent = text;
+    return s;
+  }
+
+  function pairEl(it) {
+    var el = document.createElement('div');
+    el.className = 'ln pr' + (it.bk ? ' bk' : '');
+    it.segs.forEach(function (sg) {
+      var seg = document.createElement('span');
+      seg.className = 'seg';
+      seg.appendChild(span('cd', sg.c || ' '));
+      seg.appendChild(span('tx', sg.t || ' '));
+      el.appendChild(seg);
+    });
+    return el;
+  }
+
   function buildLyrics(p) {
-    var items = settings.chords === 'hide' ? p.items.filter(function (i) { return i.type !== 'ch'; }) : p.items;
+    var hideChords = settings.chords === 'hide';
+    var items = hideChords ? p.items.filter(function (i) { return i.type !== 'ch' && i.type !== 'tab'; }) : p.items;
     els.lyrics.textContent = '';
     S.els = [];
     S.times = [];
@@ -1081,6 +1289,8 @@ textarea { min-height: 44vh; resize: vertical; font-size: 16px; line-height: 1.5
       if (it.type === 'gap') el = div('gap');
       else if (it.type === 'lbl') el = div('lbl', it.text);
       else if (it.type === 'ch') el = div('ch', it.text);
+      else if (it.type === 'tab') { el = div('tab', it.text); el.dir = 'ltr'; }
+      else if (it.type === 'pair') el = hideChords ? div(it.bk ? 'ln bk' : 'ln', it.text) : pairEl(it);
       else if (it.type === 'brk') el = div('ln brk', '· · ·');
       else el = div(it.type === 'bk' ? 'ln bk' : 'ln', it.text);
       els.lyrics.appendChild(el);
