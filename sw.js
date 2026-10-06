@@ -1,5 +1,5 @@
 // Keeps Lyric Stage working offline once it has been opened.
-const CACHE = 'lyric-stage-v2';
+const CACHE = 'lyric-stage-v3';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', (e) => {

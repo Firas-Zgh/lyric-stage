@@ -144,6 +144,9 @@ input:focus-visible, textarea:focus-visible, .cb:focus-visible, .file-in:focus-v
   color: var(--ink); font: 700 18px/1 var(--font-body); cursor: pointer; touch-action: manipulation; }
 .stepper output { min-width: 4ch; text-align: center; font: 500 15px/1 var(--font-mono); font-variant-numeric: tabular-nums; }
 
+.sync-code { font: 500 20px/1.3 var(--font-mono); letter-spacing: 0.08em; margin: 10px 0 0; font-variant-numeric: tabular-nums;
+  -webkit-user-select: all; user-select: all; overflow-wrap: anywhere; }
+.field.spaced { margin-top: 14px; }
 .import { display: grid; gap: 8px; margin-top: 12px; }
 .import label { font-weight: 700; font-size: 14px; }
 .import textarea { min-height: 120px; font: 13px/1.4 var(--font-mono); }
@@ -270,6 +273,31 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
     </section>
 
     <aside class="side">
+      <section class="panel" id="syncPanel" aria-labelledby="syncHead" hidden>
+        <h2 id="syncHead">Sync</h2>
+        <div id="syncOffBox">
+          <p class="hint">Keep the same songs on your PC and your iPhone. Create a sync code on one device, then enter it on the other. Anyone with the code can see and change these songs, so keep it private.</p>
+          <div class="ed-actions"><button id="syncCreate" class="btn primary sm" type="button">Create sync code</button></div>
+          <div class="field spaced">
+            <label for="syncInput">Already have a code?</label>
+            <div class="link-row">
+              <input id="syncInput" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX">
+              <button id="syncJoin" class="btn sm" type="button">Connect</button>
+            </div>
+          </div>
+        </div>
+        <div id="syncOnBox" hidden>
+          <p class="hint">This device is synced. Enter this code on your other devices:</p>
+          <p class="sync-code" id="syncCodeOut"></p>
+          <div class="ed-actions">
+            <button id="syncNow" class="btn sm" type="button">Sync now</button>
+            <button id="syncCopy" class="btn sm" type="button">Copy code</button>
+            <button id="syncLeave" class="btn quiet sm" type="button">Disconnect</button>
+          </div>
+        </div>
+        <p id="syncStatus" class="save-state" aria-live="polite"></p>
+      </section>
+
       <section class="panel" aria-labelledby="howHead">
         <h2 id="howHead">How it works</h2>
         <svg class="diagram" viewBox="0 0 300 140" role="img" aria-label="iPhone held sideways, monitor standing upright with the lyrics reading straight">
@@ -461,6 +489,9 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
 (function () {
   'use strict';
   var STANDALONE = true;
+  var SYNC_URL = 'https://pmgmenbntapfqqihephs.supabase.co';
+  var SYNC_KEY = 'sb_publishable_gKiZF75jBDuf91X8b-tbdw_w6wWcCbg';
+  var CAN_SYNC = STANDALONE && !!SYNC_URL && !!SYNC_KEY && typeof fetch === 'function';
   var $ = function (s) { return document.querySelector(s); };
 
   /* ---------- storage helpers ---------- */
@@ -740,7 +771,7 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
   var ALIGN_NAMES = { left: 'Left', center: 'Center', right: 'Right' };
 
   function renderChip() {
-    if (STANDALONE) els.chip.textContent = 'Songs saved in this app';
+    if (STANDALONE) els.chip.textContent = syncState.code ? 'Songs sync with your devices' : 'Songs saved in this app';
     else els.chip.textContent = cloud ? 'Library syncs to your other devices' : 'Songs saved on this device';
   }
 
@@ -867,14 +898,16 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
     }
     upsert(localSongs, song);
     saveLocal();
+    noteChange(song.id, song.updatedAt, false);
     renderAll();
-    return Promise.resolve('local');
+    return Promise.resolve(syncState.code ? 'sync' : 'local');
   }
 
   function removeSong(id) {
     var inCloud = cloud && db && cloudSongs.some(function (s) { return s.id === id; });
     localSongs = localSongs.filter(function (s) { return s.id !== id; });
     saveLocal();
+    noteChange(id, Date.now(), true);
     if (!inCloud) { renderAll(); return Promise.resolve(true); }
     return db.collection('songs').doc(id).delete().then(function () {
       cloudSongs = cloudSongs.filter(function (s) { return s.id !== id; });
@@ -920,6 +953,190 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
       } catch (e) { cloud = false; renderAll(); }
     }).catch(function () { /* no cloud library in this view */ });
   })();
+
+  /* ---------- sync between devices (home-screen app) ---------- */
+  var LS_SYNC = 'lyricstage.sync.v1';
+  var LS_DIRTY = 'lyricstage.dirty.v1';
+  var LS_TOMB = 'lyricstage.deleted.v1';
+  var syncState = Object.assign({ code: '', rev: 0, last: 0 }, (CAN_SYNC && lsGet(LS_SYNC, {})) || {});
+  var dirtyIds = (CAN_SYNC && lsGet(LS_DIRTY, {})) || {};
+  var tombs = (CAN_SYNC && lsGet(LS_TOMB, {})) || {};
+  var syncBusy = false;
+  var syncAgain = false;
+  var syncTimer = 0;
+  var lastSyncTry = 0;
+  var B32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+  function saveSyncState() { lsSet(LS_SYNC, syncState); lsSet(LS_DIRTY, dirtyIds); lsSet(LS_TOMB, tombs); }
+
+  function newSyncCode() {
+    var a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    var s = '';
+    for (var i = 0; i < a.length; i++) s += B32.charAt(a[i] & 31);
+    return s;
+  }
+  function normCode(v) {
+    return String(v || '').toUpperCase().replace(/[\s\-_.]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1').replace(/U/g, 'V');
+  }
+  function validCode(c) { return /^[0-9A-HJKMNP-TV-Z]{16}$/.test(c); }
+  function prettyCode(c) { return (c.match(/.{1,4}/g) || []).join('-'); }
+
+  function noteChange(id, at, deleted) {
+    if (!CAN_SYNC || !syncState.code) return;
+    if (deleted) { tombs[id] = at; delete dirtyIds[id]; }
+    else { dirtyIds[id] = at; delete tombs[id]; }
+    saveSyncState();
+    scheduleSync(1500);
+  }
+
+  function scheduleSync(ms) {
+    if (!CAN_SYNC || !syncState.code) return;
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(runSync, ms || 0);
+  }
+
+  function rpc(name, body) {
+    return fetch(SYNC_URL + '/rest/v1/rpc/' + name, {
+      method: 'POST',
+      headers: { 'apikey': SYNC_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      cache: 'no-store'
+    }).then(function (r) {
+      if (!r.ok) return r.text().then(function (t) { throw new Error(r.status + ' ' + t); });
+      return r.json();
+    });
+  }
+
+  function syncNote(text) { var el = $('#syncStatus'); if (el) el.textContent = text; }
+  function clockTime(ms) { var d = new Date(ms); return d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes(); }
+
+  function applyRemote(rows) {
+    var changed = false;
+    rows.forEach(function (r) {
+      var id = String(r.id || '');
+      if (!id) return;
+      var at = Number(r.updatedAt) || 0;
+      var i = localSongs.findIndex(function (s) { return s.id === id; });
+      var local = i >= 0 ? localSongs[i] : null;
+      if (r.deleted) {
+        if (local && local.updatedAt <= at) { localSongs.splice(i, 1); delete dirtyIds[id]; changed = true; }
+        return;
+      }
+      if (tombs[id] && tombs[id] >= at) return;
+      if (!local || local.updatedAt < at) {
+        var song = cleanSong({ id: id, title: r.title, artist: r.artist, lyrics: r.lyrics, updatedAt: at, source: r.source });
+        if (local) localSongs[i] = song; else localSongs.push(song);
+        if (dirtyIds[id] && dirtyIds[id] <= at) delete dirtyIds[id];
+        changed = true;
+      }
+    });
+    if (changed) { saveLocal(); renderAll(); }
+  }
+
+  function runSync() {
+    if (!CAN_SYNC || !syncState.code) return Promise.resolve();
+    if (syncBusy) { syncAgain = true; return Promise.resolve(); }
+    syncBusy = true;
+    lastSyncTry = Date.now();
+    syncNote('Syncing…');
+    var code = syncState.code;
+    var sentDirty = Object.assign({}, dirtyIds);
+    var sentTombs = Object.assign({}, tombs);
+    var batch = [];
+    Object.keys(sentDirty).forEach(function (id) {
+      var s = localSongs.find(function (x) { return x.id === id; });
+      if (s) { var d = songDoc(s); d.id = s.id; batch.push(d); }
+    });
+    Object.keys(sentTombs).forEach(function (id) { batch.push({ id: id, deleted: true, updatedAt: sentTombs[id] }); });
+    var chain = Promise.resolve();
+    for (var k = 0; k < batch.length; k += 150) {
+      (function (part) { chain = chain.then(function () { return rpc('lyric_stage_push', { sync_code: code, songs: part }); }); })(batch.slice(k, k + 150));
+    }
+    return chain.then(function () {
+      Object.keys(sentDirty).forEach(function (id) { if (dirtyIds[id] === sentDirty[id]) delete dirtyIds[id]; });
+      Object.keys(sentTombs).forEach(function (id) { if (tombs[id] === sentTombs[id]) delete tombs[id]; });
+      saveSyncState();
+      return rpc('lyric_stage_pull', { sync_code: code, since: syncState.rev || 0 });
+    }).then(function (res) {
+      if (syncState.code !== code) return;
+      applyRemote((res && res.songs) || []);
+      syncState.rev = Number(res && res.rev) || syncState.rev;
+      syncState.last = Date.now();
+      saveSyncState();
+      syncNote('Synced at ' + clockTime(syncState.last) + ' · ' + plural(localSongs.length, 'song'));
+    }).catch(function () {
+      syncNote(navigator.onLine === false ? 'Offline · changes will sync when you are back online' : 'Could not reach the sync library · will try again');
+    }).then(function () {
+      syncBusy = false;
+      if (syncAgain) { syncAgain = false; scheduleSync(300); }
+    });
+  }
+
+  function renderSync() {
+    if (!CAN_SYNC) return;
+    $('#syncPanel').hidden = false;
+    var on = !!syncState.code;
+    $('#syncOffBox').hidden = on;
+    $('#syncOnBox').hidden = !on;
+    if (on) $('#syncCodeOut').textContent = prettyCode(syncState.code);
+    renderChip();
+  }
+
+  function connectSync(code) {
+    syncState = { code: code, rev: 0, last: 0 };
+    dirtyIds = {};
+    tombs = {};
+    localSongs.forEach(function (s) { dirtyIds[s.id] = s.updatedAt; });
+    saveSyncState();
+    renderSync();
+    runSync();
+  }
+
+  if (CAN_SYNC) {
+    var leaveArmed = false;
+    $('#syncCreate').addEventListener('click', function () {
+      connectSync(newSyncCode());
+      syncNote('Code created. Enter it on your other device.');
+    });
+    $('#syncJoin').addEventListener('click', function () {
+      var code = normCode($('#syncInput').value);
+      if (!validCode(code)) { syncNote('That code should have 16 letters and numbers, like ABCD-1234-EFGH-5678.'); return; }
+      $('#syncInput').value = '';
+      connectSync(code);
+    });
+    $('#syncNow').addEventListener('click', function () { runSync(); });
+    $('#syncCopy').addEventListener('click', function () {
+      var text = prettyCode(syncState.code);
+      try {
+        navigator.clipboard.writeText(text).then(function () { syncNote('Code copied.'); }, function () { syncNote('Select the code above and copy it.'); });
+      } catch (e) { syncNote('Select the code above and copy it.'); }
+    });
+    $('#syncLeave').addEventListener('click', function () {
+      var b = $('#syncLeave');
+      if (!leaveArmed) {
+        leaveArmed = true;
+        b.textContent = 'Tap again to disconnect';
+        setTimeout(function () { leaveArmed = false; b.textContent = 'Disconnect'; }, 3000);
+        return;
+      }
+      leaveArmed = false;
+      b.textContent = 'Disconnect';
+      syncState = { code: '', rev: 0, last: 0 };
+      dirtyIds = {};
+      tombs = {};
+      saveSyncState();
+      renderSync();
+      syncNote('Disconnected. Songs stay on this device.');
+    });
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible' && Date.now() - lastSyncTry > 5000) scheduleSync(200);
+    });
+    window.addEventListener('online', function () { scheduleSync(500); });
+    setInterval(function () {
+      if (document.visibilityState === 'visible' && !S.on) scheduleSync(0);
+    }, 60000);
+  }
 
   /* ---------- moving songs: copy, paste, files ---------- */
   var SAFE_ID = /^[A-Za-z0-9_\-~:@+][A-Za-z0-9_\-.~:@+]{0,79}$/;
@@ -1188,7 +1405,7 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
       dirty = false;
       els.delBtn.hidden = false;
       els.edHead.textContent = 'Edit song';
-      setSaveState(where === 'cloud' ? 'Saved · syncs to your other devices' : (STANDALONE ? 'Saved in this app' : 'Saved on this device'));
+      setSaveState(where === 'cloud' || where === 'sync' ? 'Saved · syncs to your other devices' : (STANDALONE ? 'Saved in this app' : 'Saved on this device'));
       return song;
     });
   }
@@ -1612,7 +1829,14 @@ textarea.mono { font: 16px/1.5 var(--font-mono); white-space: pre; overflow-x: a
   /* ---------- start ---------- */
   renderSettings();
   renderAll();
-  if (STANDALONE && 'serviceWorker' in navigator) {
+  if (CAN_SYNC) {
+    renderSync();
+    if (syncState.code) {
+      if (syncState.last) syncNote('Last synced at ' + clockTime(syncState.last));
+      runSync();
+    }
+  }
+  if (STANDALONE && navigator.serviceWorker && typeof navigator.serviceWorker.register === 'function') {
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').catch(function () { /* offline copy unavailable */ });
     });
